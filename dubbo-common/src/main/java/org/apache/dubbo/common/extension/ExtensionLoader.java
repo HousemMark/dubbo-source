@@ -751,8 +751,14 @@ public class ExtensionLoader<T> {
         return getExtensionClasses().get(name);
     }
 
+    /**
+     * 判断缓存中是否存在该类
+     * 若不存在，则加载该类
+     * 若存在，直接返回
+     */
     private Map<String, Class<?>> getExtensionClasses() {
         Map<String, Class<?>> classes = cachedClasses.get();
+        // 防止重复加载
         if (classes == null) {
             synchronized (cachedClasses) {
                 classes = cachedClasses.get();
@@ -767,6 +773,8 @@ public class ExtensionLoader<T> {
 
     /**
      * synchronized in getExtensionClasses
+     * 同步加锁后获取扩展子类
+     *
      */
     private Map<String, Class<?>> loadExtensionClasses() {
         cacheDefaultExtensionName();
@@ -774,6 +782,7 @@ public class ExtensionLoader<T> {
         Map<String, Class<?>> extensionClasses = new HashMap<>();
 
         for (LoadingStrategy strategy : strategies) {
+            // 去下面的这2个位置找 扩展配置文件
             loadDirectory(extensionClasses, strategy.directory(), type.getName(), strategy.preferExtensionClassLoader(), strategy.overridden(), strategy.excludedPackages());
             loadDirectory(extensionClasses, strategy.directory(), type.getName().replace("org.apache", "com.alibaba"), strategy.preferExtensionClassLoader(), strategy.overridden(), strategy.excludedPackages());
         }
@@ -785,11 +794,13 @@ public class ExtensionLoader<T> {
      * extract and cache default extension name if exists
      */
     private void cacheDefaultExtensionName() {
+        // 获取接口上的注解信息
         final SPI defaultAnnotation = type.getAnnotation(SPI.class);
         if (defaultAnnotation == null) {
             return;
         }
 
+        // 获取SPI注解上的默认值
         String value = defaultAnnotation.value();
         if ((value = value.trim()).length() > 0) {
             String[] names = NAME_SEPARATOR.split(value);
@@ -798,6 +809,7 @@ public class ExtensionLoader<T> {
                         + ": " + Arrays.toString(names));
             }
             if (names.length == 1) {
+                // 将默认实现类的名字缓存起来
                 cachedDefaultName = names[0];
             }
         }
@@ -812,6 +824,7 @@ public class ExtensionLoader<T> {
         String fileName = dir + type;
         try {
             Enumeration<java.net.URL> urls = null;
+            // 获取类加载器
             ClassLoader classLoader = findClassLoader();
 
             // try to load from ExtensionLoader's ClassLoader first
@@ -831,6 +844,7 @@ public class ExtensionLoader<T> {
             }
 
             if (urls != null) {
+                // 遍历读取加载每个路径下的resource配置文件
                 while (urls.hasMoreElements()) {
                     java.net.URL resourceURL = urls.nextElement();
                     loadResource(extensionClasses, classLoader, resourceURL, overridden, excludedPackages);
@@ -862,6 +876,12 @@ public class ExtensionLoader<T> {
                                 line = line.substring(i + 1).trim();
                             }
                             if (line.length() > 0 && !isExcluded(line, excludedPackages)) {
+                                /**
+                                 * extensionClasses：存储扩展的map，整个查找扩展这块就是使用这个map
+                                 * resourceURL：资源url
+                                 * Class.forName(line, true, classLoader)： 实现类class
+                                 * name：实现类的名字
+                                 */
                                 loadClass(extensionClasses, resourceURL, Class.forName(line, true, classLoader), name, overridden);
                             }
                         } catch (Throwable t) {
@@ -896,12 +916,15 @@ public class ExtensionLoader<T> {
                     + clazz.getName() + " is not subtype of interface.");
         }
         if (clazz.isAnnotationPresent(Adaptive.class)) {
-            cacheAdaptiveClass(clazz, overridden);
+            // 判断该类是否存在Adaptive注解（适配者模式的类），把该类存到cachedAdaptiveClass中
+            cacheAdaptiveClass(clazz,  overridden);
         } else if (isWrapperClass(clazz)) {
+            // 判断是否为包装类，把该类存到cachedWrapperClasses中
             cacheWrapperClass(clazz);
         } else {
             clazz.getConstructor();
             if (StringUtils.isEmpty(name)) {
+                // 获取该类的类名
                 name = findAnnotationName(clazz);
                 if (name.length() == 0) {
                     throw new IllegalStateException("No such extension name for the class " + clazz.getName() + " in the config " + resourceURL);
@@ -910,9 +933,12 @@ public class ExtensionLoader<T> {
 
             String[] names = NAME_SEPARATOR.split(name);
             if (ArrayUtils.isNotEmpty(names)) {
+                // 判断该类是否存在Activate注解，若存在，则放入cachedActivates中
                 cacheActivateClass(clazz, names[0]);
                 for (String n : names) {
+                    // 缓存该类名至cachedNames
                     cacheName(clazz, n);
+                    // 判重并把类存入extensionClasses
                     saveInExtensionClass(extensionClasses, clazz, n, overridden);
                 }
             }

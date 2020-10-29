@@ -33,7 +33,7 @@ public interface DynamicConfigurationFactory {
     /**
      * Get an instance of {@link DynamicConfigurationFactory} by the specified name. If not found, take the default
      * extension of {@link DynamicConfigurationFactory}
-     *
+     * 根据SPI动态获取配置中心
      * @param name the name of extension of {@link DynamicConfigurationFactory}
      * @return non-null
      * @see 2.7.4
